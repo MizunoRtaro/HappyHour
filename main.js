@@ -4291,13 +4291,13 @@ function showHelpModal() {
                         🎃 <strong>Halloween</strong>: 15 points ($15,000)
                     </div>
                     <div style="margin: 8px 0; padding: 8px; background: rgba(255,255,255,0.1); border-radius: 5px;">
-                        🥊 <strong>Fighter</strong>: 20 points ($20,000)
+                        ✈️ <strong>Fighter</strong>: 20 points ($20,000)
                     </div>
                     <div style="margin: 8px 0; padding: 8px; background: rgba(255,255,255,0.1); border-radius: 5px;">
                         👑 <strong>King</strong>: 30 points ($30,000)
                     </div>
                     <div style="margin: 8px 0; padding: 8px; background: rgba(231, 76, 60, 0.2); border-radius: 5px; border: 1px solid #e74c3c;">
-                        😈 <strong>Devil</strong>: -50 points (-$50,000) ⚠️Danger⚠️
+                        😈 <strong>zombie</strong>: -50 points (-$50,000) ⚠️Danger⚠️
                     </div>
                 </div>
             </div>
