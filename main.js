@@ -1,11 +1,9 @@
 import * as THREE from 'three';
-import Stats from 'three/addons/libs/stats.module.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // Graphics variables
-let container, stats;
+let container;
 let camera, controls, scene, renderer;
 let textureLoader;
 let gltfLoader;
@@ -56,6 +54,7 @@ let scoreHistory = []; // スコア履歴（最大10件）
 
 // 通貨システム関連の変数
 let playerMoney = 0; // プレイヤーの所持金
+let gameStartMoney = 0; // ゲーム開始時の所持金（リールアニメーション用）
 let weaponPrices = {
     beer: 0,        // ビール: 無料（最初から所有）
     cocktail: 150000, // カクテル: $150,000
@@ -68,6 +67,12 @@ let loadingProgress = 0;
 let totalResources = 0;
 let loadedResources = 0;
 let isGameLoaded = false;
+let isLoadingFinished = false; // 読み込み完了フラグを追加
+
+// 3Dモデル読み込み管理用の変数
+let totalModelsToLoad = 0;
+let modelsLoaded = 0;
+let isLoadingModels = false;
 
 // 球選択関連の変数
 let selectedProjectileType = null;
@@ -680,11 +685,25 @@ if (typeof Ammo !== 'undefined') {
     console.error('Ammo.js is not available');
 }
 
+// 既存の「Go to Bar」ボタンを削除する関数
+function removeExistingGoToBarButtons() {
+    const existingButtons = document.querySelectorAll('.go-to-bar-button');
+    existingButtons.forEach(button => {
+        if (button && button.parentNode) {
+            button.parentNode.removeChild(button);
+        }
+    });
+    console.log(`🗑️ Removed ${existingButtons.length} existing Go to Bar buttons`);
+}
+
 function showProjectileSelection() {
     console.log('🎯 Showing projectile selection screen');
     
     // 音声ファイルの事前読み込みを即座に開始
     preloadAudio();
+    
+    // 既存の「Go to Bar」ボタンを削除
+    removeExistingGoToBarButtons();
     
     const projectileSelection = document.getElementById('projectile-selection');
     const startButton = document.getElementById('start-game-button');
@@ -751,6 +770,65 @@ function showProjectileSelection() {
                 z-index: 10;
             `;
             newOption.appendChild(priceText);
+            
+            // バーに行くボタンを追加（親要素の外に配置してgrayscaleを回避）
+            const goToBarButton = document.createElement('button');
+            goToBarButton.className = 'go-to-bar-button';
+            goToBarButton.innerHTML = '🍻 Go to Bar';
+            goToBarButton.style.cssText = `
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(45deg, #ff6b6b, #ee5a24) !important;
+                color: white !important;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 20px;
+                font-size: 14px;
+                font-weight: bold;
+                cursor: pointer;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+                transition: all 0.3s ease;
+                z-index: 15;
+                pointer-events: auto;
+                filter: saturate(2) !important;
+            `;
+            
+            // ホバーエフェクト追加
+            goToBarButton.addEventListener('mouseenter', () => {
+                goToBarButton.style.transform = 'translate(-50%, -50%) scale(1.1)';
+                goToBarButton.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.4)';
+                goToBarButton.style.background = 'linear-gradient(45deg, #ff5252, #dd2c00) !important';
+                playHoverSound();
+            });
+            
+            goToBarButton.addEventListener('mouseleave', () => {
+                goToBarButton.style.transform = 'translate(-50%, -50%) scale(1)';
+                goToBarButton.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)';
+                goToBarButton.style.background = 'linear-gradient(45deg, #ff6b6b, #ee5a24) !important';
+            });
+            
+            // クリックでショップ開く
+            goToBarButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                playSelectSound();
+                showShopModal();
+            });
+            
+            // 親コンテナに追加（newOptionではなく、その親要素に）
+            const parentContainer = newOption.parentNode;
+            parentContainer.style.position = 'relative'; // 相対位置指定のため
+            
+            // ボタンの位置を武器オプションに合わせて調整
+            const rect = newOption.getBoundingClientRect();
+            const parentRect = parentContainer.getBoundingClientRect();
+            goToBarButton.style.left = (rect.left - parentRect.left + rect.width/2) + 'px';
+            goToBarButton.style.top = (rect.top - parentRect.top + rect.height/2) + 'px';
+            goToBarButton.style.transform = 'translate(-50%, -50%)';
+            
+            parentContainer.appendChild(goToBarButton);
             
             // クリック無効化
             newOption.style.pointerEvents = 'none';
@@ -1883,23 +1961,20 @@ function init() {
     
     initPhysics();
     
-    updateLoadingText('Creating game objects...');
+    updateLoadingText('Loading 3D models...');
     updateLoadingProgress(60);
     
+    // 3Dモデル読み込み開始
+    isLoadingModels = true;
     createObjects();
     
     updateLoadingText('Initializing input system...');
-    updateLoadingProgress(80);
+    updateLoadingProgress(70);
     
     initInput();
     
-    updateLoadingText('Game ready!');
-    updateLoadingProgress(100);
-    
-    setTimeout(() => {
-        hideLoadingScreen();
-        startGame();
-    }, 1000);
+    // 3Dモデル読み込み完了を待つ
+    waitForModelsToLoad();
 }
 
 function updateLoadingProgress(percentage) {
@@ -1940,11 +2015,30 @@ function initGraphics() {
     container = document.getElementById('container');
 
     camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.2, 2000);
-
+    
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB); // 晴天の青空
+    
+    // テクスチャローダーを先に初期化
+    textureLoader = new THREE.TextureLoader();
+    gltfLoader = new GLTFLoader();
+    
+    // 宇宙背景テクスチャを読み込み
+    const universeTexture = textureLoader.load(
+        'universe.jpg',
+        function(texture) {
+            console.log('🌌 Universe background texture loaded successfully');
+            scene.background = texture;
+        },
+        function(progress) {
+            console.log('🌌 Universe texture loading progress:', (progress.loaded / progress.total * 100) + '%');
+        },
+        function(error) {
+            console.warn('⚠️ Failed to load universe texture, using fallback color:', error);
+            scene.background = new THREE.Color(0x000011); // 深い宇宙色をフォールバック
+        }
+    );
 
-    camera.position.set(0, 3, 18); // 高さ3、z=18から原点方向
+    camera.position.set(0, 3, 14); // 高さ3、z=14から原点方向（より近くに）
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -1956,9 +2050,6 @@ function initGraphics() {
     controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 1, 0); // リング中央を狙う
     controls.update();
-
-    textureLoader = new THREE.TextureLoader();
-    gltfLoader = new GLTFLoader();
 
     const ambientLight = new THREE.AmbientLight(0xbbbbbb);
     scene.add(ambientLight);
@@ -1979,11 +2070,6 @@ function initGraphics() {
     light.shadow.mapSize.y = 1024;
 
     scene.add(light);
-
-    stats = new Stats();
-    stats.domElement.style.position = 'absolute';
-    stats.domElement.style.top = '0px';
-    container.appendChild(stats.domElement);
 
     window.addEventListener('resize', onWindowResize);
 }
@@ -2576,7 +2662,6 @@ function onWindowResize() {
 
 function animate() {
     render();
-    stats.update();
 }
 
 function render() {
@@ -2939,6 +3024,9 @@ function startGame() {
     isShowingCountdown = false;
     lastCountdownNumber = -1;
     
+    // ゲーム開始時の所持金を記録（リールアニメーション用）
+    gameStartMoney = playerMoney;
+    
     // 報酬フラグをリセット（新しいゲーム開始時）
     window.gameRewardClaimed = false;
     
@@ -3269,7 +3357,6 @@ function showHTMLResultScreen(finalScore, rank, rankEmoji, message, moneyInfo) {
         location.reload();
     };
     
-    resultScreen.appendChild(resultCredit);
 }
 
 function animateMoneyReel(earnedAmount, previousTotal, newTotal) {
@@ -3279,11 +3366,11 @@ function animateMoneyReel(earnedAmount, previousTotal, newTotal) {
     if (!animatedMoneyElement || !totalMoneyElement) return;
     
     let currentEarned = 0;
-    let currentTotal = previousTotal;
+    let currentTotal = gameStartMoney; // ゲーム開始時の金額からスタート
     const duration = 2000; // 2 seconds
     const steps = 60; // 60 frames
     const earnedIncrement = earnedAmount / steps;
-    const totalIncrement = earnedAmount / steps;
+    const totalIncrement = (newTotal - gameStartMoney) / steps; // ゲーム開始時から最終金額までの増分
     
     let step = 0;
     
@@ -3611,6 +3698,9 @@ function loadSelectedProjectile(position, velocity, config) {
 }
 
 function loadFighterModel(position, mass = 1) {
+    // 3Dモデル読み込み開始を通知
+    if (isLoadingModels) onModelLoadStart();
+    
     gltfLoader.load(
         'Fighter2.glb',
         function(gltf) {
@@ -3648,14 +3738,14 @@ function loadFighterModel(position, mass = 1) {
             const quat = new THREE.Quaternion();
             createRigidBodyForModel(model, shape, mass, position, quat);
             
-            console.log('Fighter model added to scene with physics');
+            console.log('Fighter model added to scene with physics'); if (isLoadingModels) onModelLoadComplete();
         },
         function(progress) {
             console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
         },
         function(error) {
             console.error('Error loading Fighter2.glb:', error);
-            console.log('Creating fallback cube instead');
+            console.log('Creating fallback cube instead'); if (isLoadingModels) onModelLoadComplete();
             
             // フォールバック：モデルが読み込めない場合はカラフルなキューブを作成
             const fallbackMaterial = new THREE.MeshPhongMaterial({ color: 0xFF69B4 });
@@ -3722,6 +3812,9 @@ function loadTargetModel(modelType, position, initialAngle, radius, height, mass
     else if (points < 0) logColor = '😈'; // 悪魔
     else logColor = '😴'; // スリープ
     
+    // 3Dモデル読み込み開始を通知
+    if (isLoadingModels) onModelLoadStart();
+    
     gltfLoader.load(
         modelPath,
         function(gltf) {
@@ -3777,6 +3870,9 @@ function loadTargetModel(modelType, position, initialAngle, radius, height, mass
             });
             
             console.log(`${logColor} ${modelType}をメリーゴーラウンドに配置完了`);
+            
+            // 3Dモデル読み込み完了を通知
+            if (isLoadingModels) onModelLoadComplete();
         },
         function(progress) {
             // プログレス表示は簡略化
@@ -3815,11 +3911,14 @@ function loadTargetModel(modelType, position, initialAngle, radius, height, mass
             });
             
             console.log(`${logColor} ${modelType}の代替キューブを配置`);
+            
+            // 3Dモデル読み込み完了を通知（エラーの場合でも）
+            if (isLoadingModels) onModelLoadComplete();
         }
     );
 }
 
-function loadHalloweenModel1(position, initialAngle, radius, height, mass = 1) {
+function loadHalloweenModel1(position, initialAngle, radius, height, mass = 1) { if (isLoadingModels) onModelLoadStart();
     gltfLoader.load(
         '_halloween_A_sophis_1022135708_refine.glb',
         function(gltf) {
@@ -3868,7 +3967,7 @@ function loadHalloweenModel1(position, initialAngle, radius, height, mass = 1) {
                 lastHitTime: 0
             });
             
-            console.log('🎃 レアアイテムをメリーゴーラウンドに配置！');
+            console.log('🎃 レアアイテムをメリーゴーラウンドに配置！'); if (isLoadingModels) onModelLoadComplete();
         },
         function(progress) {
             console.log('ハロウィンモデル1ロード進行:', (progress.loaded / progress.total * 100) + '%');
@@ -3877,7 +3976,7 @@ function loadHalloweenModel1(position, initialAngle, radius, height, mass = 1) {
             console.error('ハロウィンモデル1のロードに失敗:', error);
             
             // フォールバック：モデルが読み込めない場合はレアなオレンジ色のキューブを作成
-            console.log('🎃⚠️ レアモデルの代わりに重いオレンジキューブを配置');
+            console.log('🎃⚠️ レアモデルの代わりに重いオレンジキューブを配置'); if (isLoadingModels) onModelLoadComplete();
             const fallbackMaterial = new THREE.MeshPhongMaterial({ color: 0xFF6600 });
             const fallbackCube = createParalellepiped(0.7, 0.7, 0.7, mass, position, new THREE.Quaternion(), fallbackMaterial);
             fallbackCube.castShadow = true;
@@ -3896,7 +3995,7 @@ function loadHalloweenModel1(position, initialAngle, radius, height, mass = 1) {
     );
 }
 
-function loadHalloweenModel2(position, initialAngle, radius, height, mass = 1) {
+function loadHalloweenModel2(position, initialAngle, radius, height, mass = 1) { if (isLoadingModels) onModelLoadStart();
     gltfLoader.load(
         '_halloween_The_obje_1022134056_refine.glb',
         function(gltf) {
@@ -3945,7 +4044,7 @@ function loadHalloweenModel2(position, initialAngle, radius, height, mass = 1) {
                 lastHitTime: 0
             });
             
-            console.log('🎃 レアアイテムをメリーゴーラウンドに配置！');
+            console.log('🎃 レアアイテムをメリーゴーラウンドに配置！'); if (isLoadingModels) onModelLoadComplete();
         },
         function(progress) {
             console.log('ハロウィンモデル2ロード進行:', (progress.loaded / progress.total * 100) + '%');
@@ -3954,7 +4053,7 @@ function loadHalloweenModel2(position, initialAngle, radius, height, mass = 1) {
             console.error('ハロウィンモデル2のロードに失敗:', error);
             
             // フォールバック：モデルが読み込めない場合はレアな紫色のキューブを作成
-            console.log('🎃⚠️ レアモデルの代わりに重い紫キューブを配置');
+            console.log('🎃⚠️ レアモデルの代わりに重い紫キューブを配置'); if (isLoadingModels) onModelLoadComplete();
             const fallbackMaterial = new THREE.MeshPhongMaterial({ color: 0x6600FF });
             const fallbackCube = createParalellepiped(0.7, 0.7, 0.7, mass, position, new THREE.Quaternion(), fallbackMaterial);
             fallbackCube.castShadow = true;
@@ -4322,5 +4421,53 @@ function showHelpModal() {
     
     document.body.appendChild(modalBg);
     console.log('❓ Help modal added to DOM');
+}
+
+function waitForModelsToLoad() {
+    if (!isLoadingModels) {
+        // モデル読み込みが開始されていない場合は即座に完了
+        finishLoading();
+        return;
+    }
+    
+    const checkInterval = setInterval(() => {
+        if (totalModelsToLoad > 0 && modelsLoaded >= totalModelsToLoad) {
+            clearInterval(checkInterval);
+            finishLoading();
+        } else {
+            // プログレスを更新
+            const modelProgress = totalModelsToLoad > 0 ? (modelsLoaded / totalModelsToLoad) * 30 : 0;
+            const finalProgress = 70 + modelProgress; // 70% + 30% for models
+            updateLoadingProgress(Math.min(finalProgress, 99));
+            updateLoadingText(`Loading 3D models... (${modelsLoaded}/${totalModelsToLoad})`);
+        }
+    }, 100);
+    
+    // タイムアウト機能（最大15秒）
+    setTimeout(() => {
+        clearInterval(checkInterval);
+        console.warn('⚠️ Model loading timeout, starting game anyway');
+        finishLoading();
+    }, 15000);
+}
+
+function finishLoading() { if (isLoadingFinished) { console.log("⚠️ Loading already finished, skipping duplicate call"); return; } isLoadingFinished = true; console.log("🎮 Starting game loading finish sequence");
+    updateLoadingText('Game ready!');
+    updateLoadingProgress(100);
+    
+    setTimeout(() => {
+        hideLoadingScreen();
+        startGame();
+    }, 1000);
+}
+
+function onModelLoadStart() {
+    totalModelsToLoad++;
+    console.log(`📦 Model loading started. Total to load: ${totalModelsToLoad}`);
+}
+
+function onModelLoadComplete() {
+    modelsLoaded++;
+    console.log(`✅ Model loaded. Progress: ${modelsLoaded}/${totalModelsToLoad}`);
 }
 
