@@ -434,14 +434,16 @@
 			#selection-content {
 				text-align: center;
 				color: white;
-				max-width: 900px;
-				padding: 40px;
+				max-width: 1100px;
+				padding: 30px 20px;
+				width: 95%;
+				margin: 0 auto;
 			}
 			
 			#selection-title {
 				font-size: 48px;
 				font-weight: bold;
-				margin-bottom: 20px;
+				margin-bottom: 15px;
 				color: #FFD700;
 				text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
 				animation: title-glow 2s ease-in-out infinite;
@@ -449,7 +451,7 @@
 			
 			#selection-subtitle {
 				font-size: 24px;
-				margin-bottom: 40px;
+				margin-bottom: 30px;
 				color: #E0E0E0;
 				text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
 			}
@@ -457,26 +459,63 @@
 			#projectile-options {
 				display: flex;
 				justify-content: center;
-				gap: 40px;
-				margin-bottom: 40px;
-				flex-wrap: wrap;
+				gap: 15px;
+				margin-bottom: 30px;
+				flex-wrap: nowrap;
+				max-width: 1200px;
+				margin-left: auto;
+				margin-right: auto;
+				overflow-x: auto;
+				padding: 15px 0;
+				scrollbar-width: none;
+				-ms-overflow-style: none;
+				position: relative;
+			}
+			
+			#projectile-options::-webkit-scrollbar {
+				display: none;
+			}
+			
+			/* スクロール時のグラデーション効果 */
+			#projectile-options::before,
+			#projectile-options::after {
+				content: '';
+				position: absolute;
+				top: 0;
+				bottom: 0;
+				width: 30px;
+				pointer-events: none;
+				z-index: 1;
+			}
+			
+			#projectile-options::before {
+				left: 0;
+				background: linear-gradient(to right, rgba(26,26,46,0.8), transparent);
+			}
+			
+			#projectile-options::after {
+				right: 0;
+				background: linear-gradient(to left, rgba(26,26,46,0.8), transparent);
 			}
 			
 			.projectile-option {
 				background: linear-gradient(45deg, #2c3e50, #34495e);
 				border: 3px solid #FFD700;
 				border-radius: 20px;
-				padding: 30px 20px;
+				padding: 15px 10px;
 				width: 220px;
+				min-width: 220px;
+				max-width: 220px;
 				text-align: center;
 				cursor: pointer;
 				transition: all 0.3s ease;
 				box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+				flex: 0 0 220px;
 			}
 			
 			.projectile-option:hover {
-				transform: translateY(-10px);
-				box-shadow: 0 16px 32px rgba(255,215,0,0.4);
+				transform: translateY(-5px) scale(1.02);
+				box-shadow: 0 12px 24px rgba(255,215,0,0.4);
 				border-color: #FFA500;
 			}
 			
@@ -490,9 +529,9 @@
 				font-size: 64px;
 				margin-bottom: 15px;
 				display: block;
-				width: 80px;
-				height: 80px;
-				margin: 0 auto 15px auto;
+				width: 70px;
+				height: 70px;
+				margin: 0 auto 12px auto;
 				background-size: contain;
 				background-repeat: no-repeat;
 				background-position: center;
@@ -517,59 +556,59 @@
 			/* Fallback emoji if images don't load */
 			.projectile-icon.error.beer::after {
 				content: '🍺';
-				font-size: 64px;
-				line-height: 80px;
+				font-size: 56px;
+				line-height: 70px;
 				display: block;
 				text-align: center;
 			}
 			
 			.projectile-icon.error.cocktail::after {
 				content: '🍸';
-				font-size: 64px;
-				line-height: 80px;
+				font-size: 56px;
+				line-height: 70px;
 				display: block;
 				text-align: center;
 			}
 			
 			.projectile-icon.error.bomb::after {
 				content: '💣';
-				font-size: 64px;
-				line-height: 80px;
+				font-size: 56px;
+				line-height: 70px;
 				display: block;
 				text-align: center;
 			}
 			
 			.projectile-icon.error.ak47::after {
 				content: '🔫';
-				font-size: 64px;
-				line-height: 80px;
+				font-size: 56px;
+				line-height: 70px;
 				display: block;
 				text-align: center;
 			}
 			
 			.projectile-name {
-				font-size: 24px;
+				font-size: 22px;
 				font-weight: bold;
-				margin-bottom: 10px;
+				margin-bottom: 8px;
 				color: #FFD700;
 			}
 			
 			.projectile-description {
-				font-size: 16px;
+				font-size: 14px;
 				color: #E0E0E0;
-				line-height: 1.4;
-				margin-bottom: 10px;
+				line-height: 1.3;
+				margin-bottom: 8px;
 			}
 			
 			.projectile-stats {
-				font-size: 14px;
+				font-size: 12px;
 				color: #FFA500;
 				font-weight: bold;
 			}
 			
 			#start-game-button {
-				font-size: 28px;
-				padding: 20px 50px;
+				font-size: 26px;
+				padding: 18px 45px;
 				background: linear-gradient(45deg, #00FF88, #00BFFF);
 				border: none;
 				border-radius: 40px;
@@ -579,6 +618,9 @@
 				box-shadow: 0 8px 16px rgba(0,255,136,0.3);
 				transition: all 0.3s ease;
 				animation: start-button-glow 2s ease-in-out infinite;
+				margin-top: 20px;
+				position: relative;
+				z-index: 100;
 			}
 			
 			@keyframes start-button-glow {
@@ -655,8 +697,8 @@
 			.projectile-option.coming-soon:hover {
 				filter: grayscale(80%) brightness(0.8);
 				opacity: 0.9;
-				transform: scale(1.02);
-				box-shadow: 0 0 20px rgba(255,215,0,0.3);
+				transform: translateY(-3px) scale(1.01);
+				box-shadow: 0 8px 16px rgba(255,215,0,0.3);
 			}
 			
 			.coming-soon-overlay {
@@ -704,6 +746,55 @@
 				}
 				100% { 
 					text-shadow: 2px 2px 4px rgba(0,0,0,0.8), 0 0 20px rgba(255,215,0,0.8);
+				}
+			}
+			
+			/* レスポンシブ対応 */
+			@media (max-width: 1200px) {
+				.projectile-option {
+					width: 200px;
+					min-width: 200px;
+					max-width: 200px;
+					flex: 0 0 200px;
+					padding: 12px 8px;
+				}
+				#projectile-options {
+					gap: 10px;
+				}
+			}
+			
+			@media (max-width: 900px) {
+				.projectile-option {
+					width: 180px;
+					min-width: 180px;
+					max-width: 180px;
+					flex: 0 0 180px;
+					padding: 10px 6px;
+				}
+				#projectile-options {
+					gap: 8px;
+				}
+				.projectile-name {
+					font-size: 18px !important;
+				}
+				.projectile-description {
+					font-size: 12px !important;
+				}
+				.projectile-stats {
+					font-size: 11px !important;
+				}
+			}
+			
+			@media (max-width: 768px) {
+				.projectile-option {
+					width: 160px;
+					min-width: 160px;
+					max-width: 160px;
+					flex: 0 0 160px;
+				}
+				#projectile-options {
+					gap: 5px;
+					padding: 0 10px;
 				}
 			}
 		</style>
