@@ -178,6 +178,13 @@ function loadGameProgress() {
         // unlockedWeaponsをownedWeaponsと同期（表示用）
         unlockedWeapons = [...ownedWeapons];
         
+        // 音量設定を読み込み
+        const savedSoundEnabled = localStorage.getItem('medarion_sound_enabled');
+        if (savedSoundEnabled !== null) {
+            isSoundEnabled = savedSoundEnabled === 'true';
+            console.log(`🔊 Loaded sound setting: ${isSoundEnabled ? 'ON' : 'OFF'}`);
+        }
+        
     } catch (error) {
         console.error('Failed to load game progress:', error);
     }
@@ -189,6 +196,7 @@ function saveGameProgress() {
         localStorage.setItem('medarion_score_history', JSON.stringify(scoreHistory));
         localStorage.setItem('medarion_player_money', playerMoney.toString());
         localStorage.setItem('medarion_owned_weapons', JSON.stringify(ownedWeapons));
+        localStorage.setItem('medarion_sound_enabled', isSoundEnabled.toString());
         // 後方互換性のため古いキーも更新
         localStorage.setItem('medarion_unlocked_weapons', JSON.stringify(ownedWeapons));
         console.log('💾 Game progress saved successfully');
@@ -221,16 +229,27 @@ function updateProgressAfterGame(finalScore) {
         }
     }
     
-    // 賞金は穴に落ちたアイテムからのみ（重複獲得防止）
-    // finalScoreがプラスの場合のみ賞金獲得
-    const earnedMoney = Math.max(0, finalScore * 1000);
+    // 賞金計算：プラスなら獲得、マイナスなら持ち金から減額
+    const moneyChange = finalScore * 1000;
     const previousMoney = playerMoney;
     
-    // 一度だけ賞金を追加（ゲーム終了時の1回のみ）
+    // 一度だけ賞金を処理（ゲーム終了時の1回のみ）
     if (!window.gameRewardClaimed) {
-        playerMoney += earnedMoney;
+        if (moneyChange >= 0) {
+            // プラススコア：賞金獲得
+            playerMoney += moneyChange;
+            console.log(`💰 Earned $${moneyChange.toLocaleString()} from items fallen into hole`);
+        } else {
+            // マイナススコア：持ち金から減額（0以下にはならない）
+            const lostMoney = Math.abs(moneyChange);
+            const actualLoss = Math.min(lostMoney, playerMoney);
+            playerMoney = Math.max(0, playerMoney - lostMoney);
+            console.log(`💸 Lost $${actualLoss.toLocaleString()} due to negative score`);
+            if (actualLoss < lostMoney) {
+                console.log(`⚠️ Could only lose $${actualLoss.toLocaleString()} (insufficient funds)`);
+            }
+        }
         window.gameRewardClaimed = true; // フラグを設定
-        console.log(`💰 Earned $${earnedMoney.toLocaleString()} from items fallen into hole`);
     }
     
     console.log(`💰 Total money: $${playerMoney.toLocaleString()}`);
@@ -239,7 +258,9 @@ function updateProgressAfterGame(finalScore) {
     saveGameProgress();
     
     return {
-        earnedMoney: earnedMoney,
+        earnedMoney: moneyChange >= 0 ? moneyChange : 0,
+        lostMoney: moneyChange < 0 ? Math.abs(moneyChange) : 0,
+        actualLoss: moneyChange < 0 ? Math.min(Math.abs(moneyChange), previousMoney) : 0,
         previousMoney: previousMoney,
         newTotal: playerMoney
     };
@@ -663,6 +684,14 @@ function toggleSound() {
         // BGMを停止
         stopBGM();
     }
+    
+    // 音量設定を即座に保存
+    try {
+        localStorage.setItem('medarion_sound_enabled', isSoundEnabled.toString());
+        console.log(`💾 Sound setting saved: ${isSoundEnabled ? 'ON' : 'OFF'}`);
+    } catch (error) {
+        console.error('Failed to save sound setting:', error);
+    }
 }
 
 // Initialize custom cursor
@@ -699,6 +728,9 @@ function removeExistingGoToBarButtons() {
 function showProjectileSelection() {
     console.log('🎯 Showing projectile selection screen');
     
+    // 音量設定の状態を確認
+    console.log(`🔊 Current sound setting: ${isSoundEnabled ? 'ON' : 'OFF'}`);
+    
     // 音声ファイルの事前読み込みを即座に開始
     preloadAudio();
     
@@ -728,6 +760,9 @@ function showProjectileSelection() {
     // Create help button
     createHelpButton();
     
+    // Create mailbox button
+    createMailboxButton();
+    
     // Create creator credit footer
     createCreatorCredit();
     
@@ -735,6 +770,7 @@ function showProjectileSelection() {
     options.forEach(option => {
         const weaponType = option.dataset.type;
         const isOwned = ownedWeapons.includes(weaponType);
+        const isComingSoon = option.classList.contains('coming-soon');
         
         // 既存のアンロック要求テキストを削除
         const existingUnlockText = option.querySelector('.unlock-requirement, .weapon-price');
@@ -746,7 +782,17 @@ function showProjectileSelection() {
         const newOption = option.cloneNode(true);
         option.parentNode.replaceChild(newOption, option);
         
-        if (!isOwned) {
+        if (isComingSoon) {
+            // カミングスーンの武器の場合
+            newOption.style.pointerEvents = 'auto'; // クリック可能にする
+            newOption.addEventListener('click', () => {
+                // 特別なサウンドエフェクト
+                playHoverSound();
+                
+                // メールボックスモーダルを表示
+                showMailboxModal();
+            });
+        } else if (!isOwned) {
             // 未購入の武器の場合
             newOption.classList.add('locked');
             newOption.style.opacity = '0.5';
@@ -911,8 +957,11 @@ function createSoundToggle() {
     
     const soundIcon = document.createElement('span');
     soundIcon.id = 'sound-icon';
-    soundIcon.textContent = '🔊';
+    soundIcon.textContent = isSoundEnabled ? '🔊' : '🔇';
     soundToggle.appendChild(soundIcon);
+    
+    // タイトルも設定に合わせて更新
+    soundToggle.title = isSoundEnabled ? 'Turn off sound' : 'Turn on sound';
     
     // Add to projectile selection screen
     const projectileSelection = document.getElementById('projectile-selection');
@@ -1157,6 +1206,95 @@ function createHelpButton() {
     }
     
     console.log('❓ Help button created');
+}
+
+function createMailboxButton() {
+    // 既存のメールボックスボタンを削除
+    const existingMailbox = document.querySelector('.mailbox-button');
+    if (existingMailbox) {
+        existingMailbox.remove();
+    }
+    
+    const mailboxButton = document.createElement('button');
+    mailboxButton.className = 'mailbox-button';
+    mailboxButton.innerHTML = '📬';
+    mailboxButton.style.cssText = `
+        position: absolute;
+        top: 120px;
+        right: 30px;
+        background: linear-gradient(45deg, #8B4513, #A0522D);
+        border: 3px solid #FFD700;
+        border-radius: 15px;
+        width: 70px;
+        height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        z-index: 16000;
+        font-size: 32px;
+        animation: mailbox-notification 2s ease-in-out infinite;
+    `;
+    
+    // ホバーエフェクト
+    mailboxButton.addEventListener('mouseenter', () => {
+        mailboxButton.style.transform = 'scale(1.1) rotate(5deg)';
+        mailboxButton.style.boxShadow = '0 6px 12px rgba(255,215,0,0.4)';
+        mailboxButton.style.borderColor = '#FFA500';
+        mailboxButton.innerHTML = '📭'; // 開いたメールボックス
+        playHoverSound();
+    });
+    
+    mailboxButton.addEventListener('mouseleave', () => {
+        mailboxButton.style.transform = 'scale(1) rotate(0deg)';
+        mailboxButton.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
+        mailboxButton.style.borderColor = '#FFD700';
+        mailboxButton.innerHTML = '📬'; // 閉じたメールボックス
+    });
+    
+    // クリックでメールボックスを開く
+    mailboxButton.addEventListener('click', () => {
+        playSelectSound();
+        showMailboxModal();
+    });
+    
+    document.getElementById('projectile-selection').appendChild(mailboxButton);
+    
+    // 通知アニメーション用CSS
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes mailbox-notification {
+            0%, 90%, 100% { 
+                transform: scale(1);
+            }
+            95% { 
+                transform: scale(1.05);
+            }
+        }
+        
+        .mailbox-button::after {
+            content: '🔴';
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            font-size: 16px;
+            animation: notification-pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes notification-pulse {
+            0%, 100% { 
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% { 
+                opacity: 0.7;
+                transform: scale(1.2);
+            }
+        }
+    `;
+    document.head.appendChild(style);
 }
 
 function createCreatorCredit() {
@@ -2038,7 +2176,7 @@ function initGraphics() {
         }
     );
 
-    camera.position.set(0, 3, 14); // 高さ3、z=14から原点方向（より近くに）
+    camera.position.set(0, 3, 12); // 高さ3、z=14から原点方向（より近くに）
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -2464,7 +2602,7 @@ function createBoxesOnDonut() {
         { type: 'halloween2', weight: 10, points: 15, mass: 5 },       // ハロウィン2: 15ポイント（重め）
         { type: 'car', weight: 8, points: 10, mass: 4 },               // 車: 10ポイント（やや重）
         { type: 'car2', weight: 8, points: 10, mass: 6 },              // 車2(赤): 10ポイント（重い）
-        { type: 'devil', weight: 4, points: -50, mass: 3 },            // 悪魔: -50ポイント（軽めで動きやすい=罠）
+        { type: 'devil', weight: 8, points: -50, mass: 3 },            // 悪魔: -50ポイント（軽めで動きやすい=罠）
         { type: 'fighter', weight: 6, points: 20, mass: 6 },           // ファイター: 20ポイント（重い）
         { type: 'king', weight: 4, points: 30, mass: 8 }               // キング: 30ポイント（最重量）
     ];
@@ -3259,6 +3397,12 @@ function showHTMLResultScreen(finalScore, rank, rankEmoji, message, moneyInfo) {
     if (moneyInfo.earnedMoney > 0) {
         fullMessage += `\n\n💰 MONEY EARNED! 💰\nItems fallen into hole: +$${moneyInfo.earnedMoney.toLocaleString()}`;
         fullMessage += `\nTotal Money: $${moneyInfo.newTotal.toLocaleString()}`;
+    } else if (moneyInfo.lostMoney > 0) {
+        fullMessage += `\n\n💸 MONEY LOST! 💸\nPenalty for negative score: -$${moneyInfo.actualLoss.toLocaleString()}`;
+        if (moneyInfo.actualLoss < moneyInfo.lostMoney) {
+            fullMessage += `\n⚠️ Insufficient funds (would have lost $${moneyInfo.lostMoney.toLocaleString()})`;
+        }
+        fullMessage += `\nRemaining Money: $${moneyInfo.newTotal.toLocaleString()}`;
     }
     
     resultMessage.textContent = fullMessage;
@@ -3284,8 +3428,8 @@ function showHTMLResultScreen(finalScore, rank, rankEmoji, message, moneyInfo) {
             <span style="color: #FFD700; font-weight: bold;">${getDisplayScore(highestScore)}</span>
         </div>
         <div style="display: flex; justify-content: space-between; margin: 8px 0;">
-            <span>Money Earned:</span>
-            <span id="animated-money" style="color: #32CD32; font-weight: bold;">+$0</span>
+            <span>${moneyInfo.lostMoney > 0 ? 'Money Lost:' : 'Money Earned:'}</span>
+            <span id="animated-money" style="color: ${moneyInfo.lostMoney > 0 ? '#FF4444' : '#32CD32'}; font-weight: bold;">${moneyInfo.lostMoney > 0 ? '-$0' : '+$0'}</span>
         </div>
         <div style="display: flex; justify-content: space-between; margin: 8px 0;">
             <span>Total Money:</span>
@@ -3311,9 +3455,13 @@ function showHTMLResultScreen(finalScore, rank, rankEmoji, message, moneyInfo) {
     resultMessage.parentNode.insertBefore(statsContainer, replayButton);
     
     // Animate money earned with reel effect
-    if (moneyInfo.earnedMoney > 0) {
+    if (moneyInfo.earnedMoney > 0 || moneyInfo.lostMoney > 0) {
         setTimeout(() => {
-            animateMoneyReel(moneyInfo.earnedMoney, moneyInfo.previousMoney, moneyInfo.newTotal);
+            if (moneyInfo.earnedMoney > 0) {
+                animateMoneyReel(moneyInfo.earnedMoney, moneyInfo.previousMoney, moneyInfo.newTotal);
+            } else {
+                animateMoneyReel(-moneyInfo.actualLoss, moneyInfo.previousMoney, moneyInfo.newTotal);
+            }
         }, 1000);
     }
     
@@ -3365,11 +3513,14 @@ function animateMoneyReel(earnedAmount, previousTotal, newTotal) {
     
     if (!animatedMoneyElement || !totalMoneyElement) return;
     
+    const isNegative = earnedAmount < 0;
+    const absAmount = Math.abs(earnedAmount);
+    
     let currentEarned = 0;
     let currentTotal = gameStartMoney; // ゲーム開始時の金額からスタート
     const duration = 2000; // 2 seconds
     const steps = 60; // 60 frames
-    const earnedIncrement = earnedAmount / steps;
+    const earnedIncrement = absAmount / steps;
     const totalIncrement = (newTotal - gameStartMoney) / steps; // ゲーム開始時から最終金額までの増分
     
     let step = 0;
@@ -3380,23 +3531,32 @@ function animateMoneyReel(earnedAmount, previousTotal, newTotal) {
         currentTotal += totalIncrement;
         
         // Update displayed values
-        animatedMoneyElement.textContent = `+$${Math.floor(currentEarned).toLocaleString()}`;
+        const prefix = isNegative ? '-' : '+';
+        animatedMoneyElement.textContent = `${prefix}$${Math.floor(currentEarned).toLocaleString()}`;
         totalMoneyElement.textContent = `$${Math.floor(currentTotal).toLocaleString()}`;
         
         // Add reel effect styling
         animatedMoneyElement.style.transform = `scale(${1 + Math.sin(step * 0.3) * 0.1})`;
-        animatedMoneyElement.style.color = `hsl(${120 + Math.sin(step * 0.2) * 30}, 100%, ${50 + Math.sin(step * 0.4) * 20}%)`;
+        
+        // Color animation: green for positive, red for negative
+        if (isNegative) {
+            animatedMoneyElement.style.color = `hsl(${0 + Math.sin(step * 0.2) * 30}, 100%, ${50 + Math.sin(step * 0.4) * 20}%)`;
+        } else {
+            animatedMoneyElement.style.color = `hsl(${120 + Math.sin(step * 0.2) * 30}, 100%, ${50 + Math.sin(step * 0.4) * 20}%)`;
+        }
         
         // Complete animation
         if (step >= steps) {
             clearInterval(reelInterval);
-            animatedMoneyElement.textContent = `+$${earnedAmount.toLocaleString()}`;
+            const prefix = isNegative ? '-' : '+';
+            animatedMoneyElement.textContent = `${prefix}$${absAmount.toLocaleString()}`;
             totalMoneyElement.textContent = `$${newTotal.toLocaleString()}`;
             animatedMoneyElement.style.transform = 'scale(1)';
-            animatedMoneyElement.style.color = '#32CD32';
+            animatedMoneyElement.style.color = isNegative ? '#FF4444' : '#32CD32';
             
             // Final flash effect
-            animatedMoneyElement.style.boxShadow = '0 0 20px #32CD32';
+            const flashColor = isNegative ? '#FF4444' : '#32CD32';
+            animatedMoneyElement.style.boxShadow = `0 0 20px ${flashColor}`;
             setTimeout(() => {
                 animatedMoneyElement.style.boxShadow = 'none';
             }, 500);
@@ -3857,6 +4017,7 @@ function loadTargetModel(modelType, position, initialAngle, radius, height, mass
             // 物理ボディを追加
             const quat = new THREE.Quaternion();
             const body = createRigidBodyForModel(model, shape, mass, position, quat);
+            
             
             // メリーゴーラウンド用にモデルの初期位置を記録
             boxesOnRing.push({
@@ -4469,5 +4630,212 @@ function onModelLoadStart() {
 function onModelLoadComplete() {
     modelsLoaded++;
     console.log(`✅ Model loaded. Progress: ${modelsLoaded}/${totalModelsToLoad}`);
+}
+
+function showComingSoonMessage() {
+    // この関数は不要になったため、メールボックスモーダルを使用
+    showMailboxModal();
+}
+
+function showMailboxModal() {
+    // 既存のモーダルがあれば削除
+    const existingModal = document.getElementById('mailbox-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // メールボックスモーダルを作成
+    const modal = document.createElement('div');
+    modal.id = 'mailbox-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 20000;
+        backdrop-filter: blur(5px);
+        animation: modal-fade-in 0.3s ease-out;
+    `;
+    
+    const mailContent = document.createElement('div');
+    mailContent.style.cssText = `
+        background: linear-gradient(135deg, #2c3e50, #34495e);
+        border: 4px solid #FFD700;
+        border-radius: 20px;
+        padding: 40px;
+        max-width: 600px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 0 40px rgba(255,215,0,0.3);
+        position: relative;
+        animation: mail-slide-in 0.5s ease-out;
+    `;
+    
+    mailContent.innerHTML = `
+        <div style="text-align: center; margin-bottom: 30px;">
+            <div style="font-size: 48px; margin-bottom: 15px;">📧</div>
+            <h2 style="color: #FFD700; margin: 0; font-size: 32px; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">
+                📬 Developer Mail 📬
+            </h2>
+            <div style="color: #87CEEB; font-size: 16px; margin-top: 10px;">
+                From: Game Development Team
+            </div>
+        </div>
+        
+        <div style="background: rgba(255,255,255,0.1); border-radius: 15px; padding: 25px; margin-bottom: 25px;">
+            <div style="color: #FFD700; font-size: 20px; font-weight: bold; margin-bottom: 15px; text-align: center;">
+                🔫 CLASSIFIED WEAPON INTEL 🔫
+            </div>
+            
+            <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                <div style="width: 80px; height: 80px; background-image: url('rifle.png'); background-size: contain; background-repeat: no-repeat; background-position: center; margin-right: 20px; filter: drop-shadow(0 0 10px rgba(255,215,0,0.5));"></div>
+                <div>
+                    <h3 style="color: #FF6B6B; margin: 0 0 5px 0; font-size: 24px;">AK-47 RIFLE</h3>
+                    <div style="color: #FFA500; font-size: 14px; font-weight: bold;">🔒 LEGENDARY WEAPON 🔒</div>
+                </div>
+            </div>
+            
+            <div style="color: #E0E0E0; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+                <strong style="color: #FFD700;">CLASSIFIED INTEL:</strong><br>
+                The ultimate weapon of mass destruction has been discovered in our arsenal. 
+                This high-powered automatic rifle delivers devastating impact with unmatched precision.
+                <br><br>
+                <strong style="color: #FF6B6B;">⚠️ WARNING:</strong> This weapon is so powerful that it could change the entire game balance. 
+                Our development team is working around the clock to ensure proper integration.
+            </div>
+            
+            <div style="background: rgba(0,0,0,0.3); border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+                <div style="color: #87CEEB; font-size: 18px; font-weight: bold; margin-bottom: 10px; text-align: center;">
+                    📊 WEAPON SPECIFICATIONS 📊
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; color: #E0E0E0;">
+                    <div>🔥 <strong>Power:</strong> Ultra</div>
+                    <div>💀 <strong>Damage:</strong> Destruction</div>
+                    <div>⚡ <strong>Fire Rate:</strong> Rapid</div>
+                    <div>🎯 <strong>Accuracy:</strong> Precision</div>
+                    <div>💥 <strong>Impact:</strong> Devastating</div>
+                    <div>🌪️ <strong>Effect:</strong> Area Damage</div>
+                </div>
+            </div>
+            
+            <div style="background: linear-gradient(45deg, rgba(255,69,0,0.2), rgba(255,215,0,0.2)); border-radius: 10px; padding: 15px; text-align: center;">
+                <div style="color: #FFD700; font-size: 18px; font-weight: bold; margin-bottom: 10px;">
+                    🚀 COMING IN NEXT UPDATE 🚀
+                </div>
+                <div style="color: #FFA500; font-size: 14px;">
+                    Expected Release: Soon™<br>
+                    Status: Final Testing Phase
+                </div>
+            </div>
+        </div>
+        
+        <div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 20px; margin-bottom: 25px;">
+            <div style="color: #87CEEB; font-size: 16px; font-weight: bold; margin-bottom: 10px;">
+                📝 Developer Notes:
+            </div>
+            <div style="color: #E0E0E0; font-size: 14px; line-height: 1.5;">
+                "We're incredibly excited to bring this legendary weapon to Happy Hour! 
+                The AK-47 will introduce new gameplay mechanics and strategies. 
+                Stay tuned for more updates!"
+                <br><br>
+                <em style="color: #FFA500;">- The Development Team</em>
+            </div>
+        </div>
+        
+        <div style="text-align: center;">
+            <button id="close-mailbox" style="
+                background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                border-radius: 25px;
+                font-size: 16px;
+                font-weight: bold;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                margin-right: 15px;
+            ">
+                📪 Close Mail
+            </button>
+            <button id="mark-as-read" style="
+                background: linear-gradient(45deg, #00FF88, #00BFFF);
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                border-radius: 25px;
+                font-size: 16px;
+                font-weight: bold;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            ">
+                ✅ Mark as Read
+            </button>
+        </div>
+    `;
+    
+    // アニメーション用CSS
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes modal-fade-in {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        
+        @keyframes mail-slide-in {
+            0% { 
+                opacity: 0;
+                transform: translateY(-50px) scale(0.9);
+            }
+            100% { 
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    modal.appendChild(mailContent);
+    document.body.appendChild(modal);
+    
+    // イベントリスナー
+    document.getElementById('close-mailbox').addEventListener('click', () => {
+        closeMailboxModal();
+    });
+    
+    document.getElementById('mark-as-read').addEventListener('click', () => {
+        // 通知ドットを削除
+        const mailboxButton = document.querySelector('.mailbox-button');
+        if (mailboxButton) {
+            mailboxButton.style.animation = 'none';
+            const style = mailboxButton.querySelector('style');
+            if (style) style.remove();
+        }
+        closeMailboxModal();
+    });
+    
+    // 背景クリックで閉じる
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeMailboxModal();
+        }
+    });
+}
+
+function closeMailboxModal() {
+    const modal = document.getElementById('mailbox-modal');
+    if (modal) {
+        modal.style.animation = 'modal-fade-in 0.3s ease-in reverse';
+        setTimeout(() => {
+            modal.remove();
+        }, 300);
+    }
 }
 

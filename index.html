@@ -510,6 +510,10 @@
 				background-image: url('bombpic.png');
 			}
 			
+			.projectile-icon.ak47 {
+				background-image: url('rifle.png');
+			}
+			
 			/* Fallback emoji if images don't load */
 			.projectile-icon.error.beer::after {
 				content: '🍺';
@@ -529,6 +533,14 @@
 			
 			.projectile-icon.error.bomb::after {
 				content: '💣';
+				font-size: 64px;
+				line-height: 80px;
+				display: block;
+				text-align: center;
+			}
+			
+			.projectile-icon.error.ak47::after {
+				content: '🔫';
 				font-size: 64px;
 				line-height: 80px;
 				display: block;
@@ -629,6 +641,71 @@
 				color: #FFD700;
 				text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
 			}
+			
+			/* Coming Soon styles */
+			.projectile-option.coming-soon {
+				position: relative;
+				filter: grayscale(100%) brightness(0.6);
+				opacity: 0.8;
+				pointer-events: none;
+				overflow: hidden;
+				cursor: pointer;
+			}
+			
+			.projectile-option.coming-soon:hover {
+				filter: grayscale(80%) brightness(0.8);
+				opacity: 0.9;
+				transform: scale(1.02);
+				box-shadow: 0 0 20px rgba(255,215,0,0.3);
+			}
+			
+			.coming-soon-overlay {
+				position: absolute;
+				top: 0;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				background: linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,69,0,0.1));
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+				align-items: center;
+				backdrop-filter: blur(2px);
+				animation: coming-soon-pulse 3s ease-in-out infinite;
+			}
+			
+			.coming-soon-text {
+				font-size: 20px;
+				font-weight: bold;
+				color: #FFD700;
+				text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+				margin-bottom: 5px;
+				animation: coming-soon-glow 2s ease-in-out infinite alternate;
+			}
+			
+			.coming-soon-subtitle {
+				font-size: 14px;
+				color: #FFA500;
+				text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+			}
+			
+			@keyframes coming-soon-pulse {
+				0%, 100% { 
+					background: linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,69,0,0.1));
+				}
+				50% { 
+					background: linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,69,0,0.2));
+				}
+			}
+			
+			@keyframes coming-soon-glow {
+				0% { 
+					text-shadow: 2px 2px 4px rgba(0,0,0,0.8), 0 0 10px rgba(255,215,0,0.5);
+				}
+				100% { 
+					text-shadow: 2px 2px 4px rgba(0,0,0,0.8), 0 0 20px rgba(255,215,0,0.8);
+				}
+			}
 		</style>
 	</head>
 	<body>
@@ -696,6 +773,17 @@
 						<div class="projectile-name">Party Bomb</div>
 						<div class="projectile-description">Explodes after 2 seconds, creating a blast radius</div>
 						<div class="projectile-stats">💥 Explosion | 🌪️ Area Effect</div>
+					</div>
+					
+					<div class="projectile-option coming-soon" data-type="ak47">
+						<div class="projectile-icon ak47"></div>
+						<div class="projectile-name">AK-47 Rifle</div>
+						<div class="projectile-description">High-powered automatic rifle with devastating impact</div>
+						<div class="projectile-stats">🔥 Ultra Power | 💀 Destruction</div>
+						<div class="coming-soon-overlay">
+							<div class="coming-soon-text">COMING SOON</div>
+							<div class="coming-soon-subtitle">🔒 Legendary Weapon</div>
+						</div>
 					</div>
 				</div>
 				
