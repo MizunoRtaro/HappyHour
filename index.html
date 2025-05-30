@@ -797,6 +797,106 @@
 					padding: 0 10px;
 				}
 			}
+			
+			/* Initial Menu Loading Screen */
+			#initial-loading-screen {
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background: url('happyhour.png') center/cover, linear-gradient(135deg, #FF6B9D 0%, #FF8E53 50%, #FFD93D 100%);
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				z-index: 20000;
+				opacity: 1;
+				transition: opacity 1s ease-out;
+			}
+			
+			#initial-loading-screen.hidden {
+				opacity: 0;
+				pointer-events: none;
+			}
+			
+			#initial-loading-content {
+				text-align: center;
+				color: white;
+				z-index: 20001;
+			}
+			
+			#initial-loading-title {
+				font-size: 72px;
+				font-weight: bold;
+				margin-bottom: 40px;
+				text-shadow: 4px 4px 8px rgba(0,0,0,0.8);
+				animation: initial-title-glow 2s ease-in-out infinite;
+			}
+			
+			@keyframes initial-title-glow {
+				0%, 100% { 
+					text-shadow: 4px 4px 8px rgba(0,0,0,0.8), 0 0 30px #FFD700;
+					color: #FFD700;
+				}
+				50% { 
+					text-shadow: 4px 4px 8px rgba(0,0,0,0.8), 0 0 50px #FFD700, 0 0 80px #FFA500;
+					color: #FFA500;
+				}
+			}
+			
+			#initial-loading-subtitle {
+				font-size: 32px;
+				margin-bottom: 50px;
+				color: #E0E0E0;
+				text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+				animation: initial-subtitle-pulse 3s ease-in-out infinite;
+			}
+			
+			@keyframes initial-subtitle-pulse {
+				0%, 100% { opacity: 0.8; transform: scale(1); }
+				50% { opacity: 1; transform: scale(1.05); }
+			}
+			
+			#initial-loading-spinner {
+				width: 80px;
+				height: 80px;
+				border: 8px solid rgba(255,255,255,0.3);
+				border-top: 8px solid #FFD700;
+				border-radius: 50%;
+				margin: 0 auto 30px auto;
+				animation: initial-loading-spin 1.5s linear infinite;
+			}
+			
+			@keyframes initial-loading-spin {
+				0% { transform: rotate(0deg); }
+				100% { transform: rotate(360deg); }
+			}
+			
+			#initial-loading-text {
+				font-size: 28px;
+				color: #E0E0E0;
+				text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+				animation: initial-loading-dots 2s ease-in-out infinite;
+			}
+			
+			@keyframes initial-loading-dots {
+				0%, 20% { content: 'Loading'; }
+				40% { content: 'Loading.'; }
+				60% { content: 'Loading..'; }
+				80%, 100% { content: 'Loading...'; }
+			}
+			
+			#initial-loading-text::after {
+				content: '';
+				animation: initial-dots-animation 2s ease-in-out infinite;
+			}
+			
+			@keyframes initial-dots-animation {
+				0%, 20% { content: ''; }
+				40% { content: '.'; }
+				60% { content: '..'; }
+				80%, 100% { content: '...'; }
+			}
 		</style>
 	</head>
 	<body>
@@ -831,6 +931,15 @@
 					<div id="loading-bar"></div>
 				</div>
 				<div id="loading-percentage">0%</div>
+			</div>
+		</div>
+		
+		<div id="initial-loading-screen">
+			<div id="initial-loading-content">
+				<div id="initial-loading-title">🍺 Happy Hour 🥂</div>
+				<div id="initial-loading-subtitle">Welcome to the Ultimate Party Game!</div>
+				<div id="initial-loading-spinner"></div>
+				<div id="initial-loading-text">Loading</div>
 			</div>
 		</div>
 		
@@ -910,6 +1019,143 @@
 		<script>
 			let retryCount = 0;
 			const maxRetries = 5;
+			let initialLoadingComplete = false;
+			let menuAssetsLoaded = 0;
+			let totalMenuAssets = 0;
+
+			// メニューアセットのプリロード管理
+			const menuAssets = {
+				images: [
+					'menu.png',
+					'beerpic.png',
+					'cocktailpic.png',
+					'bombpic.png',
+					'rifle.png',
+					'pointer.png'
+				],
+				audio: [
+					'bgm/waltz.mp3',
+					'bgm/click.mp3',
+					'bgm/clickselect.mp3',
+					'bgm/clickstart.mp3'
+				]
+			};
+
+			function preloadMenuAssets() {
+				totalMenuAssets = menuAssets.images.length + menuAssets.audio.length;
+				menuAssetsLoaded = 0;
+				
+				console.log(`🎨 Starting to preload ${totalMenuAssets} menu assets...`);
+				
+				// 画像のプリロード
+				menuAssets.images.forEach((imagePath, index) => {
+					const img = new Image();
+					img.onload = () => {
+						menuAssetsLoaded++;
+						console.log(`🖼️ Image loaded: ${imagePath} (${menuAssetsLoaded}/${totalMenuAssets})`);
+						updateInitialLoadingProgress();
+					};
+					img.onerror = () => {
+						menuAssetsLoaded++;
+						console.warn(`⚠️ Failed to load image: ${imagePath}`);
+						updateInitialLoadingProgress();
+					};
+					img.src = imagePath;
+				});
+
+				// 音声のプリロード
+				menuAssets.audio.forEach((audioPath, index) => {
+					const audio = new Audio();
+					audio.preload = 'auto';
+					
+					const onLoad = () => {
+						menuAssetsLoaded++;
+						console.log(`🎵 Audio loaded: ${audioPath} (${menuAssetsLoaded}/${totalMenuAssets})`);
+						updateInitialLoadingProgress();
+						audio.removeEventListener('canplaythrough', onLoad);
+						audio.removeEventListener('error', onError);
+					};
+					
+					const onError = () => {
+						menuAssetsLoaded++;
+						console.warn(`⚠️ Failed to load audio: ${audioPath}`);
+						updateInitialLoadingProgress();
+						audio.removeEventListener('canplaythrough', onLoad);
+						audio.removeEventListener('error', onError);
+					};
+					
+					audio.addEventListener('canplaythrough', onLoad);
+					audio.addEventListener('error', onError);
+					audio.src = audioPath;
+					audio.load();
+				});
+
+				// タイムアウト設定（10秒）
+				setTimeout(() => {
+					if (menuAssetsLoaded < totalMenuAssets) {
+						console.log(`⏰ Asset loading timeout, forcing completion (${menuAssetsLoaded}/${totalMenuAssets})`);
+						menuAssetsLoaded = totalMenuAssets;
+						updateInitialLoadingProgress();
+					}
+				}, 10000);
+			}
+
+			function updateInitialLoadingProgress() {
+				const progress = Math.round((menuAssetsLoaded / totalMenuAssets) * 100);
+				const loadingText = document.querySelector('#initial-loading-text');
+				
+				if (loadingText) {
+					if (progress < 100) {
+						loadingText.textContent = `Loading assets... ${progress}%`;
+					} else {
+						loadingText.textContent = 'Assets loaded! Starting...';
+						console.log('✅ All menu assets preloaded successfully!');
+						
+						// アセット読み込み完了後、少し待ってからメニューに移行
+						setTimeout(() => {
+							if (window.Ammo) {
+								hideInitialLoading();
+							}
+						}, 500);
+					}
+				}
+			}
+
+			// 初期ローディング画面の管理
+			function showInitialLoading() {
+				const initialLoadingScreen = document.getElementById('initial-loading-screen');
+				const projectileSelection = document.getElementById('projectile-selection');
+				
+				// 初期ローディング画面を表示
+				initialLoadingScreen.style.display = 'flex';
+				initialLoadingScreen.classList.remove('hidden');
+				
+				// メニュー画面を非表示
+				projectileSelection.style.display = 'none';
+				projectileSelection.classList.add('hidden');
+				
+				// メニューアセットのプリロード開始
+				setTimeout(() => {
+					preloadMenuAssets();
+				}, 500);
+			}
+
+			function hideInitialLoading() {
+				const initialLoadingScreen = document.getElementById('initial-loading-screen');
+				const projectileSelection = document.getElementById('projectile-selection');
+				
+				// 初期ローディング画面をフェードアウト
+				initialLoadingScreen.classList.add('hidden');
+				
+				// 1秒後にメニュー画面を表示
+				setTimeout(() => {
+					initialLoadingScreen.style.display = 'none';
+					projectileSelection.style.display = 'flex';
+					projectileSelection.classList.remove('hidden');
+					initialLoadingComplete = true;
+					console.log('🎯 Menu screen displayed with preloaded assets');
+				}, 1000);
+			}
 
 			function initAmmo() {
 				console.log('Checking Ammo.js availability... Attempt:', retryCount + 1);
@@ -922,6 +1168,20 @@
 					Ammo().then(function(AmmoLib) {
 						window.Ammo = AmmoLib;
 						console.log('Ammo.js initialized successfully');
+						
+						// アセット読み込みが完了していない場合は待機
+						const checkAssetsAndProceed = () => {
+							if (menuAssetsLoaded >= totalMenuAssets) {
+								setTimeout(() => {
+									hideInitialLoading();
+								}, 500);
+							} else {
+								console.log('⏳ Waiting for assets to finish loading...');
+								setTimeout(checkAssetsAndProceed, 200);
+							}
+						};
+						
+						checkAssetsAndProceed();
 						
 						// メインスクリプトの実行
 						const script = document.createElement('script');
@@ -936,6 +1196,10 @@
 						document.body.appendChild(script);
 					}).catch(function(error) {
 						console.error('Ammo.js initialization failed:', error);
+						// エラーの場合も初期ローディングを終了
+						setTimeout(() => {
+							hideInitialLoading();
+						}, 2000);
 					});
 				} else {
 					retryCount++;
@@ -944,13 +1208,18 @@
 						setTimeout(initAmmo, 1000);
 					} else {
 						console.error('Ammo.js failed to load after', maxRetries, 'attempts');
+						// 最大試行回数に達した場合も初期ローディングを終了
+						setTimeout(() => {
+							hideInitialLoading();
+						}, 2000);
 					}
 				}
 			}
 
 			// ページ読み込み完了後に初期化
 			window.addEventListener('load', function() {
-				console.log('Page loaded, initializing Ammo.js...');
+				console.log('Page loaded, showing initial loading screen...');
+				showInitialLoading();
 				setTimeout(initAmmo, 500);
 			});
 		</script>

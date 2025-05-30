@@ -2153,7 +2153,7 @@ function initGraphics() {
     container = document.getElementById('container');
 
     camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.2, 2000);
-    
+
     scene = new THREE.Scene();
     
     // テクスチャローダーを先に初期化
@@ -2620,7 +2620,7 @@ function createBoxesOnDonut() {
         }
         return objectTypes[0]; // フォールバック
     }
-
+    
     for (let ringLayer = 0; ringLayer < 2; ringLayer++) {
         const ringRadius = donutTubeRadius + ringRadiusStep * (ringLayer + 1);
         
@@ -2701,7 +2701,7 @@ function createBoxesOnDonut() {
         } else {
             // 3Dモデルを配置
             loadTargetModel(selectedType.type, pos, angle, radius, boxSize * 0.5 + 0.6, selectedType.mass, selectedType.points);
-        }
+         }
     }
 }
 
@@ -2750,11 +2750,11 @@ function initInput() {
         // ゲームが読み込まれてからのみ操作を受け付ける
         if (!isGameLoaded || !clickRequest) {
             if (isGameLoaded) {
-                mouseCoords.set(
-                    (event.clientX / window.innerWidth) * 2 - 1,
-                    -(event.clientY / window.innerHeight) * 2 + 1
-                );
-                clickRequest = true;
+            mouseCoords.set(
+                (event.clientX / window.innerWidth) * 2 - 1,
+                -(event.clientY / window.innerHeight) * 2 + 1
+            );
+            clickRequest = true;
             }
         }
     });
@@ -3205,7 +3205,7 @@ function updateGameTimer() {
     }
     
     if (!isShowingResult) {
-        updateUI();
+    updateUI();
     }
 }
 
@@ -3265,7 +3265,7 @@ function showTimeUp() {
     console.log('⏰ TIME UP! Displaying on screen');
     
     // 1.5秒後にカウントダウンを隠してリザルト表示
-    setTimeout(() => {
+        setTimeout(() => {
         countdownDisplay.style.display = 'none';
         showDirectResult();
     }, 1500);
@@ -4231,7 +4231,7 @@ function loadHalloweenModel2(position, initialAngle, radius, height, mass = 1) {
             });
         }
     );
-}
+} 
 
 // ユーザー操作リスナーの設定
 function setupUserInteractionListeners() {
